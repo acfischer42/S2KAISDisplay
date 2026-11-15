@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>S2KDisplay - AIS</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="screen">
+    <header>
+      <div><p class="eyebrow">SIGNAL K · OWN VESSEL</p><h1>AIS Display <small id="version"></small></h1></div>
+      <div class="status"><span id="indicator" class="dot"></span><span id="connection">Connecting</span></div>
+    </header>
+    <div id="warning" class="warning" role="status" hidden></div>
+    <nav aria-label="AIS display pages">
+      <button type="button" id="vessel-tab" aria-pressed="true">Vessel &amp; voyage</button>
+      <button type="button" id="dynamic-tab" aria-pressed="false">Dynamic data</button>
+    </nav>
+    <section id="vessel-page">
+      <div class="section-title"><h2>Own vessel &amp; voyage</h2><span>STATIC / VOYAGE</span></div>
+      <dl id="vessel-fields"></dl>
+    </section>
+    <section id="dynamic-page" hidden>
+      <div class="section-title"><h2>Own dynamic data</h2><span>LIVE DATA</span></div>
+      <dl id="dynamic-fields"></dl>
+    </section>
+    <footer><span id="source">AIS source not configured</span><span id="updated">Waiting for AIS data</span></footer>
+    <p class="disclaimer">Read-only Signal K data from configured AIS sources. Not a certified AIS display; verify important information on your AIS equipment.</p>
+  </main>
+  <script type="module" src="app.mjs"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+:root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0b1821; color: #e3f2eb; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 22px; background: radial-gradient(circle at top, #1d3840, #0b1821 65%); min-height: 100vh; }
+.screen { max-width: 760px; margin: auto; padding: 24px; border: 1px solid #42645d; border-radius: 12px; background: #132a30; box-shadow: 0 15px 40px #0007; }
+header, .section-title, footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.eyebrow { font-size: 11px; color: #a4cdbd; letter-spacing: .16em; margin: 0 0 4px; }
+h1 { margin: 0; font-size: 25px; letter-spacing: .02em; }
+h1 small { font-size: 12px; color: #a4cdbd; font-weight: normal; }
+.status { font-size: 12px; white-space: nowrap; color: #bad6ca; display: flex; align-items: center; gap: 7px; }
+.dot { width: 9px; height: 9px; background: #cc9974; border-radius: 50%; }
+.dot.online { background: #70d7a4; }
+.warning { margin-top: 16px; padding: 11px; background: #533c25; color: #ffe4bb; border-radius: 5px; font-size: 13px; }
+nav { display: flex; gap: 4px; margin-top: 22px; border-bottom: 1px solid #42645d; }
+nav button { border: 0; color: #b4cfc3; background: transparent; padding: 10px 14px; font: inherit; cursor: pointer; border-bottom: 3px solid transparent; }
+nav button[aria-pressed=true] { border-color: #8fdeb7; color: white; }
+.section-title { margin: 19px 0 10px; }
+.section-title h2 { font-size: 16px; margin: 0; }
+.section-title span { font-size: 10px; color: #90b4a7; letter-spacing: .08em; }
+dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid #3c5a51; border-radius: 6px; background: #3c5a51; margin: 0; }
+.field { min-width: 0; background: #19353a; padding: 10px 13px; min-height: 65px; }
+dt { color: #a4c9ba; font-size: 12px; }
+dd { margin: 4px 0 0; font-size: 16px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+dd.missing { color: #78968a; font-size: 14px; }
+footer { align-items: flex-start; margin-top: 17px; color: #a7c7b9; font-size: 12px; }
+.disclaimer { color: #86a79a; font-size: 11px; line-height: 1.4; margin: 18px 0 0; }
+@media (max-width: 480px) { body { padding: 0; } .screen { border: 0; border-radius: 0; box-shadow: none; padding: 16px; min-height: 100vh; } dl { grid-template-columns: 1fr; } .field { min-height: 0; display: grid; grid-template-columns: 42% 58%; align-items: baseline; gap: 5px; } dd { margin: 0; } footer { flex-direction: column; } h1 { font-size: 21px; } }
