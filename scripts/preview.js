@@ -3,11 +3,12 @@
 const http = require('node:http')
 const fs = require('node:fs')
 const path = require('node:path')
+const { EventEmitter } = require('node:events')
 const createPlugin = require('../index')
 const port = Number(process.env.PORT || 18747)
 const routes = new Map()
 let callback
-const app = {
+const app = Object.assign(new EventEmitter(), {
   error: console.error,
   setPluginError: console.error,
   setPluginStatus: console.log,
@@ -18,14 +19,14 @@ const app = {
       unsubscribes.push(() => { callback = null })
     }
   }
-}
+})
 const plugin = createPlugin(app)
 const router = {
   access() { return this },
   get(route, handler) { routes.set(route, handler) }
 }
 plugin.registerWithRouter(router)
-plugin.start({ sources: ['demo-ais.AIVDO'] })
+plugin.start({ sources: ['demo-ais.AIVDO'], inlandMode: true, inlandInputEvent: 'ais-voyage-in' })
 const sample = [
   { path: '', value: { mmsi: '123456789', name: 'DEMO VESSEL', communication: { callsignVhf: 'DEMO1' }, registrations: { imo: 'IMO 1234567' } } },
   { path: 'navigation.destination.commonName', value: 'SAMPLE HARBOUR' },
@@ -46,6 +47,9 @@ const sample = [
 ]
 function emit() {
   callback?.({ updates: [{ $source: 'demo-ais.AIVDO', timestamp: new Date().toISOString(), values: sample }] })
+  const body = 'PIWWIVD,,,,,,,3,12,1,,,,'
+  const checksum = [...body].reduce((sum, char) => sum ^ char.charCodeAt(0), 0).toString(16).padStart(2, '0').toUpperCase()
+  app.emit('ais-voyage-in', `$${body}*${checksum}`)
 }
 emit()
 const timer = setInterval(emit, 5000)

@@ -1,12 +1,15 @@
-# S2KDisplay
+# S2KAISDisplay
 
 A read-only Signal K display for **own-vessel AIS data**, with vessel/voyage and
 dynamic-data screens. It also supplies a Freeboard-SK extension side panel.
 
 **Not a certified AIS display.** Signal K may not receive all of the messages,
-fields or hardware status shown on the transceiver. This plugin does not decode
-raw AIS sentences itself and cannot verify what the transceiver actually sends.
+fields or hardware status shown on the transceiver. The plugin does not decode
+raw AIS position reports itself and cannot verify what the transceiver actually sends.
 Do not use it as the sole source for navigation or safety decisions.
+
+The package and plugin identifier remain `signalk-s2k-display` after the
+repository and display-name change.
 
 ## Installation
 
@@ -19,14 +22,14 @@ cd /data/conf/signalk
 npm install /path/to/signalk-s2k-display-0.1.0.tgz
 ```
 
-Restart Signal K and enable **S2KDisplay** under **Plugin Config**. In the
+Restart Signal K and enable **S2KAISDisplay** under **Plugin Config**. In the
 plugin settings add the exact AIS `$source` identifier(s) visible in the Signal
 K Data Browser (for example `my-ais.AIVDO`; your actual identifier will differ).
 No data is shown until at least one source is configured. Select only sources
 that you know carry your own transceiver's reports. Do not select output from
 an AIS generator if the intention is to inspect the actual hardware.
 
-Open **Webapps → S2KDisplay**. In Freeboard-SK, use the extension toolbar
+Open **Webapps → S2KAISDisplay**. In Freeboard-SK, use the extension toolbar
 button for the **AIS display** side panel. This needs a Freeboard version
 supporting `plotterExtensions` iframe panels, and a Signal K server supporting
 resource providers. Older installations may still use the standalone webapp.
@@ -46,9 +49,27 @@ some AIS installations do not expose own-ship reports to Signal K at all.
 After a plugin restart the screen waits for new matching updates. Static and
 voyage messages can take several minutes to arrive. If another device or
 plugin publishes using the same source identifier, it cannot be distinguished.
-Fields not provided by those updates are shown as **Not available**; crew,
+Fields not provided by those updates are shown as **Not available**; position
 accuracy, RAIM and internal/external GNSS are not inferred. Existing AIS
 equipment settings cannot be edited from this display.
+
+### Inland personnel
+
+Enable **Show inland personnel** in Plugin Config to show passengers, crew and
+other persons. Configure the **AIS input sentence event** to match the
+`sentenceEvent` on the existing AIS input connection, for example
+`ais-voyage-in` as used by SignalK2AIS. Do not use a global NMEA event or
+an output event; the input must carry reports from the actual transceiver.
+Sharing the same input event with SignalK2AIS does not open a second serial
+connection. This plugin only listens; it does not transmit settings.
+
+The counts come from checksum-validated `$PIWWIVD` reports on that event, not
+from data submitted to SignalK2AIS or generated AIS messages. If the device
+does not send the report, or a count is omitted or marked unavailable, the
+display shows **Not available**. Counts are retained only in memory and reset on
+restart; hover over a value for its receive time. Counts over 30 minutes old
+are marked **outdated**. A count is not proof of the device's current
+configuration, especially if the report is old.
 
 Speed is converted from m/s to knots, angles from radians to degrees, and rate
 of turn from radians/second to degrees/minute. Draught and dimensions are

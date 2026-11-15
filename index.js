@@ -1,6 +1,7 @@
 'use strict'
 
 const { paths } = require('./lib/fields')
+const { InlandError, parseInland } = require('./lib/inland')
 const { version } = require('./package.json')
 const id = 'signalk-s2k-display'
 
@@ -11,8 +12,11 @@ module.exports = app => {
   let unsubscribes = []
   let lastError = null
   let providerRegistered = false
+  let inlandMode = false
+  let inlandEvent = null
+  let inland = null
   const manifest = () => ({
-    name: 'S2KDisplay', description: 'AIS own-vessel and dynamic data',
+    name: 'S2KAISDisplay', description: 'AIS own-vessel and dynamic data',
     version, apiVersion: '1', requires: ['panels.iframe', 'buttons'],
     buttons: [{ id: 's2k-display-button', title: 'AIS display', slot: 'mapToolbar', icon: 'sensors', action: { type: 'togglePanel', panel: 's2k-display-panel' } }],
     panels: [{ id: 's2k-display-panel', title: 'AIS display', type: 'iframe', url: '/signalk-s2k-display/', lifecycle: 'keepAlive' }]
@@ -20,7 +24,7 @@ module.exports = app => {
 
   function report(error) {
     lastError = error instanceof Error ? error.message : String(error)
-    app.error(`S2KDisplay: ${lastError}`)
+    app.error(`S2KAISDisplay: ${lastError}`)
     app.setPluginError(lastError)
   }
   function accept(path, value, source, timestamp) {
@@ -51,8 +55,18 @@ module.exports = app => {
       }
     }
   }
+  function onSentence(sentence) {
+    if (!running) return
+    try {
+      const personnel = parseInland(sentence)
+      if (personnel) inland = { ...personnel, source: inlandEvent, timestamp: new Date().toISOString() }
+    } catch (error) {
+      if (!(error instanceof InlandError)) throw error
+      app.error(`S2KAISDisplay: ${error.message}`)
+    }
+  }
   const plugin = {
-    id, name: 'S2KDisplay',
+    id, name: 'S2KAISDisplay',
     description: 'Read-only AIS own-vessel and dynamic data display.',
     schema: {
       type: 'object',
@@ -61,6 +75,15 @@ module.exports = app => {
           type: 'array', title: 'AIS Signal K sources', default: [],
           description: 'Exact $source identifiers from Signal K Data Browser. Only these sources are shown.',
           items: { type: 'string', title: 'AIS source' }
+        },
+        inlandMode: {
+          type: 'boolean', title: 'Show inland personnel', default: false,
+          description: 'Show crew, passengers and other persons from received PIWWIVD reports.'
+        },
+        inlandInputEvent: {
+          type: 'string', title: 'AIS input sentence event', default: 'ais-voyage-in',
+          description: 'Route this event from the AIS input connection only, as in SignalK2AIS. Do not use global or output events.',
+          pattern: '^ais-voyage-[A-Za-z0-9_-]+$'
         }
       }
     },
@@ -72,10 +95,26 @@ module.exports = app => {
         throw error
       }
       sources = [...new Set((options.sources ?? []).map(source => source.trim()))]
+      if (options.inlandMode !== undefined && typeof options.inlandMode !== 'boolean') {
+        const error = new Error('Inland mode must be a boolean.')
+        report(error)
+        throw error
+      }
+      const event = options.inlandInputEvent ?? 'ais-voyage-in'
+      if (options.inlandMode && (typeof event !== 'string' || !/^ais-voyage-[A-Za-z0-9_-]+$/.test(event) || event.endsWith('-out') || event.endsWith('-toStdout'))) {
+        const error = new Error('Inland input event must be an AIS input event starting with ais-voyage-; output events are not allowed.')
+        report(error)
+        throw error
+      }
+      inlandMode = options.inlandMode ?? false
       records = {}
       lastError = null
       running = true
       try {
+        if (inlandMode) {
+          inlandEvent = event
+          app.on(inlandEvent, onSentence)
+        }
         if (typeof app.registerResourceProvider === 'function' && !providerRegistered) {
           app.registerResourceProvider({
             type: 'plotterExtensions',
@@ -85,8 +124,8 @@ module.exports = app => {
                 if (!running || resourceId !== id) throw new Error(`No such plotterExtensions resource: ${resourceId}`)
                 return manifest()
               },
-              setResource: async () => { throw new Error('S2KDisplay is read-only') },
-              deleteResource: async () => { throw new Error('S2KDisplay is read-only') }
+              setResource: async () => { throw new Error('S2KAISDisplay is read-only') },
+              deleteResource: async () => { throw new Error('S2KAISDisplay is read-only') }
             }
           })
           providerRegistered = true
@@ -104,6 +143,10 @@ module.exports = app => {
     },
     stop() {
       running = false
+      if (inlandEvent) app.removeListener(inlandEvent, onSentence)
+      inlandEvent = null
+      inlandMode = false
+      inland = null
       for (const unsubscribe of unsubscribes.splice(0)) unsubscribe()
       sources = []
       records = {}
@@ -112,7 +155,7 @@ module.exports = app => {
       const readRouter = typeof router.access === 'function' ? router.access('readonly') : router
       readRouter.get('/state', (req, res) => {
         res.set('Cache-Control', 'no-store')
-        res.json({ running, version, sources, records, lastError, panelAvailable: providerRegistered })
+        res.json({ running, version, sources, records, lastError, inlandMode, inland, panelAvailable: providerRegistered })
       })
     }
   }

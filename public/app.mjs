@@ -28,13 +28,15 @@ export function format(value, kind) {
 }
 
 const vessel = [
+  ['Destination', 'navigation.destination.commonName', 'text'], ['ETA', 'navigation.destination.eta', 'date'],
+  ['Passengers', 'passengers', 'count', 'inland'], ['Crew', 'crew', 'count', 'inland'],
+  ['Other personnel', 'other', 'count', 'inland'], ['Navigation status', 'navigation.state', 'text'],
+  ['Draught', 'design.draft.current', 'metres'],
   ['MMSI', 'mmsi', 'text'], ['Vessel name', 'name', 'text'],
   ['Call sign', 'communication.callsignVhf', 'text'], ['IMO number', 'registrations.imo', 'text'],
-  ['Destination', 'navigation.destination.commonName', 'text'], ['ETA', 'navigation.destination.eta', 'date'],
-  ['Draught', 'design.draft.current', 'metres'], ['Navigation status', 'navigation.state', 'text'],
   ['Length', 'design.length.overall', 'metres'], ['Beam', 'design.beam', 'metres'],
   ['AIS antenna from bow', 'sensors.ais.fromBow', 'metres'], ['AIS antenna from centre', 'sensors.ais.fromCenter', 'metres'],
-  ['Ship / cargo type', 'design.aisShipType', 'shipType'], ['Crew', null, 'text']
+  ['Ship / cargo type', 'design.aisShipType', 'shipType']
 ]
 const dynamic = [
   ['Date / time', 'navigation.datetime', 'date'], ['Position', 'navigation.position', 'position'],
@@ -50,7 +52,7 @@ export function mount(document, { fetch: fetcher = globalThis.fetch, interval = 
   const containers = [[vessel, byId('vessel-fields')], [dynamic, byId('dynamic-fields')]]
   const elements = new Map()
   for (const [fields, container] of containers) {
-    for (const [label, path, kind] of fields) {
+    for (const [label, path, kind, category] of fields) {
       const box = document.createElement('div')
       box.className = 'field'
       const title = document.createElement('dt')
@@ -60,7 +62,7 @@ export function mount(document, { fetch: fetcher = globalThis.fetch, interval = 
       value.className = 'missing'
       box.append(title, value)
       container.append(box)
-      elements.set(label, { value, path, kind })
+      elements.set(label, { value, path, kind, category, box })
     }
   }
   function show(page) {
@@ -80,11 +82,15 @@ export function mount(document, { fetch: fetcher = globalThis.fetch, interval = 
     byId('warning').hidden = !warning
     byId('source').textContent = state.sources.length ? `AIS sources: ${state.sources.join(', ')}` : 'AIS source not configured'
     let newest = 0
-    for (const [label, { value, path, kind }] of elements) {
-      const record = state.records[path]
-      const text = record ? format(record.value, kind) : null
+    for (const [label, { value, path, kind, category, box }] of elements) {
+      box.hidden = category === 'inland' && !state.inlandMode
+      const record = category === 'inland'
+        ? state.inland && { value: state.inland[path], source: state.inland.source, timestamp: state.inland.timestamp }
+        : state.records[path]
+      const text = record ? format(record.value, kind === 'count' ? 'text' : kind) : null
       const age = record ? Date.now() - Date.parse(record.timestamp) : 0
-      const old = dynamic.some(([name]) => name === label) && age > 180000
+      const old = (dynamic.some(([name]) => name === label) && age > 180000) ||
+        (category === 'inland' && age > 1800000)
       value.textContent = text === null ? 'Not available' : `${text}${old ? ' · outdated' : ''}`
       value.className = text === null ? 'missing' : ''
       value.title = record ? `${record.source} · ${record.timestamp}` : ''

@@ -1,5 +1,6 @@
 :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0b1821; color: #e3f2eb; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; padding: 22px; background: radial-gradient(circle at top, #1d3840, #0b1821 65%); min-height: 100vh; }
 .screen { max-width: 760px; margin: auto; padding: 24px; border: 1px solid #42645d; border-radius: 12px; background: #132a30; box-shadow: 0 15px 40px #0007; }
 header, .section-title, footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; }

@@ -6,14 +6,14 @@
   "author": "acfischer42",
   "main": "index.js",
   "engines": { "node": ">=18" },
-  "repository": { "type": "git", "url": "https://github.com/acfischer42/S2KDisplay.git" },
+  "repository": { "type": "git", "url": "https://github.com/acfischer42/S2KAISDisplay.git" },
   "keywords": ["signalk-node-server-plugin", "signalk-webapp", "signalk-category-ais"],
   "signalk-plugin-enabled-by-default": false,
-  "signalk": { "displayName": "S2KDisplay", "appIcon": "./icon.svg" },
+  "signalk": { "displayName": "S2KAISDisplay", "appIcon": "./icon.svg" },
   "files": ["index.js", "lib", "public", "icon.svg", "README.md", "LICENSE"],
   "scripts": {
     "test": "node --test test/*.test.js",
-    "check": "node --check index.js && node --check lib/fields.js && node --check public/app.mjs && node --check scripts/preview.js",
+    "check": "node --check index.js && node --check lib/fields.js && node --check lib/inland.js && node --check public/app.mjs && node --check scripts/preview.js",
     "preview": "node scripts/preview.js"
   }
 }

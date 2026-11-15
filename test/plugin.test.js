@@ -1,7 +1,14 @@
 'use strict'
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
+const { EventEmitter } = require('node:events')
 const createPlugin = require('../index')
+const { parseInland } = require('../lib/inland')
+
+function sentence(body) {
+  const checksum = [...body].reduce((sum, char) => sum ^ char.charCodeAt(0), 0).toString(16).padStart(2, '0')
+  return `$${body}*${checksum}`
+}
 
 function fixture() {
   let handler
@@ -10,7 +17,7 @@ function fixture() {
   let unsubscribed = 0
   let errorHandler
   const errors = []
-  const app = {
+  const app = Object.assign(new EventEmitter(), {
     error: message => errors.push(message),
     setPluginError: message => errors.push(message),
     setPluginStatus() {},
@@ -21,7 +28,7 @@ function fixture() {
       errorHandler = onError
       unsubscribes.push(() => { unsubscribed++ })
     } }
-  }
+  })
   const plugin = createPlugin(app)
   let route
   const router = { access: () => router, get: (path, fn) => { route = fn } }
@@ -32,7 +39,7 @@ function fixture() {
     return result
   }
   const emit = (source, values, timestamp = '2026-11-15T10:00:00Z') => handler({ updates: [{ $source: source, timestamp, values }] })
-  return { plugin, state, emit, get provider() { return provider }, get subscription() { return subscription }, get unsubscribed() { return unsubscribed }, errors, fail: error => errorHandler(error) }
+  return { app, plugin, state, emit, get provider() { return provider }, get subscription() { return subscription }, get unsubscribed() { return unsubscribed }, errors, fail: error => errorHandler(error) }
 }
 
 test('only configured source deltas populate known own-vessel fields including nested root and parent values', () => {
@@ -88,4 +95,46 @@ test('Freeboard provider is read-only and follows plugin lifecycle', async () =>
   await assert.rejects(methods.getResource('signalk-s2k-display'), /No such/)
   f.plugin.start({ sources: ['ais'] })
   assert.ok((await methods.listResources())['signalk-s2k-display'])
+})
+
+test('inland personnel are accepted only from the dedicated input event and cleared on restart', () => {
+  const f = fixture()
+  f.plugin.start({ sources: ['ais'], inlandMode: true, inlandInputEvent: 'ais-voyage-in' })
+  const report = sentence('PIWWIVD,,,,,,,3,12,1,,,,')
+  f.app.emit('other', report)
+  assert.equal(f.state().inland, null)
+  f.app.emit('ais-voyage-in', report)
+  assert.deepEqual({ ...f.state().inland, timestamp: 'time' }, {
+    crew: 3, passengers: 12, other: 1, source: 'ais-voyage-in', timestamp: 'time'
+  })
+  f.app.emit('ais-voyage-in', '$PIWWIVD,,,,,,,7,8,9,,,,*00')
+  assert.equal(f.state().inland.passengers, 12)
+  assert.match(f.errors.at(-1), /checksum/)
+  f.app.emit('ais-voyage-in', sentence('PIWWIVD,,,,,,,255,,255,,,,'))
+  assert.equal(f.state().inland.crew, null)
+  assert.equal(f.state().inland.passengers, null)
+  assert.equal(f.state().inland.other, null)
+  f.plugin.stop()
+  assert.equal(f.app.listenerCount('ais-voyage-in'), 0)
+  assert.equal(f.state().inland, null)
+  f.plugin.start({ sources: ['ais'] })
+  assert.equal(f.state().inlandMode, false)
+  assert.equal(f.app.listenerCount('ais-voyage-in'), 0)
+})
+
+test('inland parser validates checksums, field counts and numeric ranges', () => {
+  assert.equal(parseInland('!AIVDO,other'), null)
+  assert.equal(parseInland(sentence('PIWWIVD,,,,,,,,,,,,,')), null)
+  assert.throws(() => parseInland(sentence('PIWWIVD,,,,,,,256,1,1,,,,')), /crew/)
+  assert.throws(() => parseInland(sentence('PIWWIVD,,,,,,,1,8192,1,,,,')), /passengers/)
+  assert.throws(() => parseInland(sentence('PIWWIVD,1,2')), /13 fields/)
+  assert.throws(() => parseInland('$PIWWIVD,,,,,,,1,1,1,,,,*00'), /checksum/)
+})
+
+test('inland mode rejects unsafe event names and invalid configuration', () => {
+  const f = fixture()
+  assert.throws(() => f.plugin.start({ inlandMode: 'true' }), /boolean/)
+  for (const event of ['nmea0183', 'ais-voyage-out', 'ais-voyage-in-toStdout', '']) {
+    assert.throws(() => f.plugin.start({ inlandMode: true, inlandInputEvent: event }), /input event/)
+  }
 })
