@@ -1,5 +1,14 @@
 export function format(value, kind) {
   if (value === null || value === undefined) return null
+  if (kind === 'knots' && typeof value === 'object' && Number.isFinite(value.minimum)) return `≥ ${(value.minimum * 1.943844492).toFixed(1)} kn`
+  if (kind === 'turn' && typeof value === 'object' && ['port', 'starboard'].includes(value.direction)) return `Over 5°/30 s to ${value.direction} (no turn indicator)`
+  if (kind === 'eta' && typeof value === 'object') {
+    const { month, day, hour, minute } = value
+    if (![month, day, hour, minute].every(Number.isInteger)) return null
+    const pad = number => String(number).padStart(2, '0')
+    return `${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)} UTC (year not sent)`
+  }
+  if (kind === 'eta') kind = 'date'
   if (kind === 'position') {
     if (!value || !Number.isFinite(value.latitude) || !Number.isFinite(value.longitude) || Math.abs(value.latitude) > 90 || Math.abs(value.longitude) > 180) return null
     const coordinate = (n, lat) => {
@@ -28,7 +37,7 @@ export function format(value, kind) {
 }
 
 const vessel = [
-  ['Destination', 'navigation.destination.commonName', 'text'], ['ETA', 'navigation.destination.eta', 'date'],
+  ['Destination', 'navigation.destination.commonName', 'text'], ['ETA', 'navigation.destination.eta', 'eta'],
   ['Passengers', 'passengers', 'count', 'inland'], ['Crew', 'crew', 'count', 'inland'],
   ['Other personnel', 'other', 'count', 'inland'], ['Navigation status', 'navigation.state', 'text'],
   ['Draught', 'design.draft.current', 'metres'],
@@ -39,10 +48,11 @@ const vessel = [
   ['Ship / cargo type', 'design.aisShipType', 'shipType']
 ]
 const dynamic = [
-  ['Date / time', 'navigation.datetime', 'date'], ['Position', 'navigation.position', 'position'],
+  ['Date / time', 'navigation.datetime', 'date'], ['AIS UTC second / status', 'sensors.ais.utcSecond', 'text'],
+  ['Position', 'navigation.position', 'position'],
   ['Speed over ground', 'navigation.speedOverGround', 'knots'], ['Course over ground', 'navigation.courseOverGroundTrue', 'angle'],
   ['Heading', 'navigation.headingTrue', 'angle'], ['Rate of turn', 'navigation.rateOfTurn', 'turn'],
-  ['Position accuracy', null, 'text'], ['RAIM status', null, 'text'], ['GNSS in use', null, 'text']
+  ['Position accuracy', 'sensors.ais.positionAccuracy', 'text'], ['RAIM status', 'sensors.ais.raim', 'text'], ['GNSS in use', null, 'text']
 ]
 
 export function mount(document, { fetch: fetcher = globalThis.fetch, interval = globalThis.setInterval, clear = globalThis.clearInterval } = {}) {
@@ -77,10 +87,10 @@ export function mount(document, { fetch: fetcher = globalThis.fetch, interval = 
     byId('version').textContent = `v${state.version}`
     byId('connection').textContent = state.running ? 'Server connected' : 'Plugin stopped'
     byId('indicator').classList.toggle('online', state.running)
-    const warning = state.demo ? 'MOCK PREVIEW: sample data, not connected to a vessel.' : state.lastError || (!state.running ? 'Enable the plugin in Signal K Plugin Config.' : !state.sources.length ? 'Configure the exact AIS source identifier in Signal K Plugin Config.' : '')
+    const warning = state.demo ? 'MOCK PREVIEW: sample data, not connected to a vessel.' : state.lastError || (!state.running ? 'Enable the plugin in Signal K Plugin Config.' : !state.aisReadback && !state.sources.length ? 'Configure the exact AIS source identifier in Signal K Plugin Config.' : '')
     byId('warning').textContent = warning
     byId('warning').hidden = !warning
-    byId('source').textContent = state.sources.length ? `AIS sources: ${state.sources.join(', ')}` : 'AIS source not configured'
+    byId('source').textContent = state.aisReadback ? 'Direct own-vessel AIS input (AIVDO)' : state.sources.length ? `AIS sources: ${state.sources.join(', ')}` : 'AIS source not configured'
     let newest = 0
     for (const [label, { value, path, kind, category, box }] of elements) {
       box.hidden = category === 'inland' && !state.inlandMode
@@ -89,8 +99,8 @@ export function mount(document, { fetch: fetcher = globalThis.fetch, interval = 
         : state.records[path]
       const text = record ? format(record.value, kind === 'count' ? 'text' : kind) : null
       const age = record ? Date.now() - Date.parse(record.timestamp) : 0
-      const old = (dynamic.some(([name]) => name === label) && age > 180000) ||
-        (category === 'inland' && age > 1800000)
+      const old = ((dynamic.some(([name]) => name === label) || (path === 'navigation.state' && state.aisReadback)) && age > 180000) ||
+        ((category === 'inland' || record?.source.endsWith('(AIVDO type 5)')) && age > 1800000)
       value.textContent = text === null ? 'Not available' : `${text}${old ? ' · outdated' : ''}`
       value.className = text === null ? 'missing' : ''
       value.title = record ? `${record.source} · ${record.timestamp}` : ''

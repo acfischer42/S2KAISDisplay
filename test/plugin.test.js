@@ -4,6 +4,7 @@ const assert = require('node:assert/strict')
 const { EventEmitter } = require('node:events')
 const createPlugin = require('../index')
 const { parseInland } = require('../lib/inland')
+const { report, dynamicReport } = require('./helpers/ais')
 
 function sentence(body) {
   const checksum = [...body].reduce((sum, char) => sum ^ char.charCodeAt(0), 0).toString(16).padStart(2, '0')
@@ -14,6 +15,7 @@ function fixture() {
   let handler
   let subscription
   let provider
+  let registrations = 0
   let unsubscribed = 0
   let errorHandler
   const errors = []
@@ -21,7 +23,7 @@ function fixture() {
     error: message => errors.push(message),
     setPluginError: message => errors.push(message),
     setPluginStatus() {},
-    registerResourceProvider: value => { provider = value },
+    registerResourceProvider: value => { provider = value; registrations++ },
     subscriptionmanager: { subscribe(spec, unsubscribes, onError, callback) {
       subscription = spec
       handler = callback
@@ -39,7 +41,7 @@ function fixture() {
     return result
   }
   const emit = (source, values, timestamp = '2026-11-15T10:00:00Z') => handler({ updates: [{ $source: source, timestamp, values }] })
-  return { app, plugin, state, emit, get provider() { return provider }, get subscription() { return subscription }, get unsubscribed() { return unsubscribed }, errors, fail: error => errorHandler(error) }
+  return { app, plugin, state, emit, get provider() { return provider }, get registrations() { return registrations }, unregisterProvider() { provider = undefined }, get subscription() { return subscription }, get unsubscribed() { return unsubscribed }, errors, fail: error => errorHandler(error) }
 }
 
 test('only configured source deltas populate known own-vessel fields including nested root and parent values', () => {
@@ -91,10 +93,14 @@ test('Freeboard provider is read-only and follows plugin lifecycle', async () =>
   assert.equal(manifest.panels[0].url, '/signalk-s2k-display/')
   await assert.rejects(methods.setResource(), /read-only/)
   f.plugin.stop()
+  f.unregisterProvider()
+  assert.equal(f.state().panelAvailable, false)
   assert.deepEqual(await methods.listResources(), {})
   await assert.rejects(methods.getResource('signalk-s2k-display'), /No such/)
   f.plugin.start({ sources: ['ais'] })
-  assert.ok((await methods.listResources())['signalk-s2k-display'])
+  assert.equal(f.registrations, 2)
+  assert.equal(f.state().panelAvailable, true)
+  assert.ok((await f.provider.methods.listResources())['signalk-s2k-display'])
 })
 
 test('inland personnel are accepted only from the dedicated input event and cleared on restart', () => {
@@ -137,4 +143,48 @@ test('inland mode rejects unsafe event names and invalid configuration', () => {
   for (const event of ['nmea0183', 'ais-voyage-out', 'ais-voyage-in-toStdout', '']) {
     assert.throws(() => f.plugin.start({ inlandMode: true, inlandInputEvent: event }), /input event/)
   }
+})
+
+test('optional raw type 5 readback takes precedence without using settings and unsubscribes', () => {
+  const f = fixture()
+  f.plugin.start({ sources: ['ais'], aisReadback: true, inlandMode: false, inlandInputEvent: 'ais-voyage-in' })
+  f.emit('ais', [{ path: 'navigation.destination.commonName', value: 'OLDER' }])
+  assert.deepEqual(f.state().records, {})
+  const [first, second] = report()
+  f.app.emit('other', first)
+  f.app.emit('ais-voyage-in', second)
+  assert.equal(f.state().records.mmsi, undefined)
+  f.app.emit('ais-voyage-in', first)
+  f.app.emit('ais-voyage-in', second)
+  assert.equal(f.state().records.mmsi.value, '211123456')
+  assert.equal(f.state().records['design.draft.current'].value, 1.2)
+  assert.equal(f.state().records['navigation.destination.commonName'].value, 'BRYC')
+  assert.match(f.state().records.mmsi.source, /AIVDO type 5/)
+  f.emit('ais', [{ path: 'navigation.destination.commonName', value: 'DIFFERENT' }], '2099-01-01T00:00:00Z')
+  assert.equal(f.state().records['navigation.destination.commonName'].value, 'BRYC')
+  const unknown = report({ draft: 0 })
+  for (const part of unknown) f.app.emit('ais-voyage-in', part)
+  assert.equal(f.state().records['design.draft.current'].value, null)
+  f.plugin.stop()
+  assert.equal(f.app.listenerCount('ais-voyage-in'), 0)
+  assert.deepEqual(f.state().records, {})
+})
+
+test('direct mode merges dynamic and voyage reports, rejects Signal K fallback and clears on restart', () => {
+  const f = fixture()
+  f.plugin.start({ aisReadback: true })
+  f.app.emit('ais-voyage-in', dynamicReport())
+  for (const part of report()) f.app.emit('ais-voyage-in', part)
+  assert.equal(f.state().records.name.value, 'DEMO VESSEL')
+  assert.equal(f.state().records['navigation.state'].value, 'moored')
+  assert.match(f.state().records['navigation.position'].source, /AIVDO type 1/)
+  f.app.emit('ais-voyage-in', dynamicReport({ speed: 1023 }))
+  assert.equal(f.state().records['navigation.speedOverGround'].value, null)
+  assert.equal(f.state().records.name.value, 'DEMO VESSEL')
+  f.emit('ais', [{ path: 'navigation.speedOverGround', value: 99 }])
+  assert.equal(f.state().records['navigation.speedOverGround'].value, null)
+  assert.equal(f.state().records['navigation.datetime'], undefined)
+  f.plugin.start({ aisReadback: true })
+  assert.deepEqual(f.state().records, {})
+  assert.equal(f.app.listenerCount('ais-voyage-in'), 1)
 })

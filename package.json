@@ -1,6 +1,6 @@
 {
   "name": "signalk-s2k-display",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Read-only AIS own-vessel display and Freeboard side panel for Signal K",
   "license": "MIT",
   "author": "acfischer42",
@@ -13,7 +13,7 @@
   "files": ["index.js", "lib", "public", "icon.svg", "README.md", "LICENSE"],
   "scripts": {
     "test": "node --test test/*.test.js",
-    "check": "node --check index.js && node --check lib/fields.js && node --check lib/inland.js && node --check public/app.mjs && node --check scripts/preview.js",
+    "check": "node --check index.js && node --check lib/fields.js && node --check lib/inland.js && node --check lib/ais-readback.js && node --check public/app.mjs && node --check scripts/preview.js",
     "preview": "node scripts/preview.js"
   }
 }

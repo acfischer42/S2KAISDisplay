@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { EventEmitter } = require('node:events')
 const createPlugin = require('../index')
+const { report, dynamicReport } = require('../test/helpers/ais')
 const port = Number(process.env.PORT || 18747)
 const routes = new Map()
 let callback
@@ -26,7 +27,7 @@ const router = {
   get(route, handler) { routes.set(route, handler) }
 }
 plugin.registerWithRouter(router)
-plugin.start({ sources: ['demo-ais.AIVDO'], inlandMode: true, inlandInputEvent: 'ais-voyage-in' })
+plugin.start({ sources: ['demo-ais.AIVDO'], inlandMode: true, aisReadback: true, inlandInputEvent: 'ais-voyage-in' })
 const sample = [
   { path: '', value: { mmsi: '123456789', name: 'DEMO VESSEL', communication: { callsignVhf: 'DEMO1' }, registrations: { imo: 'IMO 1234567' } } },
   { path: 'navigation.destination.commonName', value: 'SAMPLE HARBOUR' },
@@ -50,6 +51,8 @@ function emit() {
   const body = 'PIWWIVD,,,,,,,3,12,1,,,,'
   const checksum = [...body].reduce((sum, char) => sum ^ char.charCodeAt(0), 0).toString(16).padStart(2, '0').toUpperCase()
   app.emit('ais-voyage-in', `$${body}*${checksum}`)
+  for (const part of report({ destination: 'SAMPLE HARBOUR', mmsi: 123456789, draft: 18 })) app.emit('ais-voyage-in', part)
+  app.emit('ais-voyage-in', dynamicReport({ mmsi: 123456789, state: 8 }))
 }
 emit()
 const timer = setInterval(emit, 5000)
