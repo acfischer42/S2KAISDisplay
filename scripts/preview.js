@@ -65,7 +65,7 @@ const server = http.createServer((req, res) => {
   const route = pathname.replace(/^\/plugins\/signalk-s2k-display/, '')
   if (req.method !== 'GET' || !routes.has(route)) { res.writeHead(404); res.end('Not found'); return }
   res.set = (name, value) => { res.setHeader(name, value); return res }
-  res.json = value => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(value)); return res }
+  res.json = value => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ ...value, demo: true })); return res }
   routes.get(route)(req, res)
 })
 server.on('error', error => { console.error(error); process.exitCode = 1; clearInterval(timer) })

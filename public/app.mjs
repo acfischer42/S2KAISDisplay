@@ -75,7 +75,7 @@ export function mount(document, { fetch: fetcher = globalThis.fetch, interval = 
     byId('version').textContent = `v${state.version}`
     byId('connection').textContent = state.running ? 'Server connected' : 'Plugin stopped'
     byId('indicator').classList.toggle('online', state.running)
-    const warning = state.lastError || (!state.running ? 'Enable the plugin in Signal K Plugin Config.' : !state.sources.length ? 'Configure the exact AIS source identifier in Signal K Plugin Config.' : '')
+    const warning = state.demo ? 'MOCK PREVIEW: sample data, not connected to a vessel.' : state.lastError || (!state.running ? 'Enable the plugin in Signal K Plugin Config.' : !state.sources.length ? 'Configure the exact AIS source identifier in Signal K Plugin Config.' : '')
     byId('warning').textContent = warning
     byId('warning').hidden = !warning
     byId('source').textContent = state.sources.length ? `AIS sources: ${state.sources.join(', ')}` : 'AIS source not configured'
